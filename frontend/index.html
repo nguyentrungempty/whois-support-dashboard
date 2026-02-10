@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <title>WHOIS Support Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            background: #0f172a;
+            color: #e5e7eb;
+            font-family: system-ui;
+            padding: 30px
+        }
+        
+        .card {
+            max-width: 960px;
+            margin: auto;
+            background: #020617;
+            border-radius: 16px;
+            padding: 24px
+        }
+        
+        input {
+            width: 70%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #020617;
+            color: #fff
+        }
+        
+        button {
+            padding: 12px 18px;
+            border-radius: 8px;
+            border: none;
+            background: #2563eb;
+            color: #fff
+        }
+        
+        .tabs button {
+            margin-right: 6px;
+            background: #020617;
+            border: 1px solid #334155
+        }
+        
+        .tab {
+            display: none;
+            margin-top: 20px
+        }
+        
+        .tab.active {
+            display: block
+        }
+        
+        .box {
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 10px
+        }
+        
+        .warn {
+            color: #facc15
+        }
+        
+        .ok {
+            color: #22c55e
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h2>🔍 WHOIS Support Dashboard</h2>
+
+        <input id="domain" placeholder="vd: example.com">
+        <button onclick="lookup()">Tra cứu</button>
+
+        <div class="tabs" style="margin-top:20px">
+            <button onclick="show('whois')">WHOIS</button>
+            <button onclick="show('dns')">DNS</button>
+            <button onclick="show('ip')">IP / Network</button>
+            <button onclick="show('alerts')">Alerts</button>
+        </div>
+
+        <div id="content"></div>
+    </div>
+
+    <script>
+        let data = null;
+
+        function show(t) {
+            document.querySelectorAll(".tab").forEach(e => e.classList.remove("active"));
+            document.getElementById(t).classList.add("active");
+        }
+
+        async function lookup() {
+            const d = document.getElementById("domain").value;
+            const r = await fetch(`/check?domain=${d}`);
+            data = await r.json();
+            render();
+        }
+
+        function render() {
+            document.getElementById("content").innerHTML = `
+
+<div id="whois" class="tab active">
+  <div class="box">Registrar: ${data.whois.registrar}</div>
+  <div class="box">Created: ${data.whois.created}</div>
+  <div class="box">Expires: ${data.whois.expires}</div>
+  <div class="box">Status: ${data.whois.status.join(", ")}</div>
+</div>
+
+<div id="dns" class="tab">
+  ${Object.keys(data.dns).map(k=>`
+    <div class="box"><b>${k}</b><br>${data.dns[k].join("<br>")||"—"}</div>
+  `).join("")}
+</div>
+
+<div id="ip" class="tab">
+  ${data.ip_networks.map(i=>`
+    <div class="box">
+      ${i.ip}<br>
+      ${i.asn}<br>
+      ${i.city}, ${i.region}, ${i.country}
+    </div>
+  `).join("")}
+</div>
+
+<div id="alerts" class="tab">
+  ${data.alerts.length
+    ? data.alerts.map(a=>`<div class="warn">⚠ ${a}</div>`).join("")
+    : "<div class='ok'>Không có cảnh báo</div>"
+  }
+</div>
+`;
+}
+    </script>
+</body>
+
+</html>
