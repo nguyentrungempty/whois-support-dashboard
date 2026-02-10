@@ -1,1 +1,1 @@
-# whois_domains_all_in_one
+# whois-support-dashboard
