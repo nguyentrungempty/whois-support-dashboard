@@ -4,82 +4,115 @@ const detectProvider = require("./provider-map");
 
 const app = express();
 
-/* ===== Helpers ===== */
+/* ================= HELPERS ================= */
 
 function formatDate(ts) {
     if (!ts) return "Không rõ";
+    if (typeof ts === "string") return ts.split("T")[0].split("-").reverse().join("/");
     if (ts.toString().length === 10) {
         return new Date(ts * 1000).toLocaleDateString("vi-VN");
     }
-    return ts;
+    return "Không rõ";
 }
 
 async function dnsLookup(domain, type) {
     try {
         const res = await axios.get(
-            `https://dns.google/resolve?name=${domain}&type=${type}`
+            "https://dns.google/resolve?name=" + domain + "&type=" + type
         );
         return res.data.Answer ? res.data.Answer.map(r => r.data) : [];
-    } catch {
+    } catch (e) {
         return [];
     }
 }
 
 async function ipLookup(ip) {
     try {
-        const res = await axios.get(`https://ipinfo.io/${ip}/json`);
+        const res = await axios.get("https://ipinfo.io/" + ip + "/json");
         return {
-            ip,
+            ip: ip,
             asn: res.data.org || "Không rõ",
-            provider: detectProvider(res.data.org),
-            country: res.data.country,
-            region: res.data.region,
-            city: res.data.city
+            provider: detectProvider(res.data.org || ""),
+            country: res.data.country || "",
+            region: res.data.region || "",
+            city: res.data.city || ""
         };
-    } catch {
-        return { ip, asn: "Không rõ", provider: "Unknown" };
+    } catch (e) {
+        return {
+            ip: ip,
+            asn: "Không rõ",
+            provider: "Unknown"
+        };
     }
 }
 
 async function rdapLookup(domain) {
     try {
         const res = await axios.get(
-            `https://rdap.identitydigital.services/rdap/domain/${domain}`
+            "https://rdap.identitydigital.services/rdap/domain/" + domain
         );
         return res.data;
-    } catch {
+    } catch (e) {
         return null;
     }
 }
 
-/* ===== API ===== */
+/* ================= API ================= */
 
-app.get("/check", async(req, res) => {
+app.get("/check", async function(req, res) {
     const domain = req.query.domain;
-    if (!domain) return res.json({ error: "Thiếu domain" });
+    if (!domain) {
+        return res.json({ error: "Thiếu domain" });
+    }
 
-    // WHOIS (RDAP)
+    /* ---------- WHOIS (RDAP) ---------- */
     const rdap = await rdapLookup(domain);
-    const whois = rdap ?
-        {
-            registrar: rdap.entities ? .find(e => e.roles ? .includes("registrar")) ?
-                .vcardArray ? .[1] ? .find(i => i[0] === "fn") ? .[3] || "Không rõ",
-            created: formatDate(
-                rdap.events ? .find(e => e.eventAction === "registration") ? .eventDate
-            ),
-            expires: formatDate(
-                rdap.events ? .find(e => e.eventAction === "expiration") ? .eventDate
-            ),
-            status: rdap.status || []
-        } :
-        {
-            registrar: "Không rõ",
-            created: "Không rõ",
-            expires: "Không rõ",
-            status: []
-        };
 
-    // DNS records
+    let registrar = "Không rõ";
+    let created = null;
+    let expires = null;
+    let status = [];
+
+    if (rdap) {
+        status = rdap.status || [];
+
+        if (rdap.entities && Array.isArray(rdap.entities)) {
+            for (let i = 0; i < rdap.entities.length; i++) {
+                const e = rdap.entities[i];
+                if (e.roles && e.roles.indexOf("registrar") !== -1) {
+                    if (e.vcardArray && e.vcardArray[1]) {
+                        const vc = e.vcardArray[1];
+                        for (let j = 0; j < vc.length; j++) {
+                            if (vc[j][0] === "fn" && vc[j][3]) {
+                                registrar = vc[j][3];
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (rdap.events && Array.isArray(rdap.events)) {
+            for (let k = 0; k < rdap.events.length; k++) {
+                if (rdap.events[k].eventAction === "registration") {
+                    created = rdap.events[k].eventDate;
+                }
+                if (rdap.events[k].eventAction === "expiration") {
+                    expires = rdap.events[k].eventDate;
+                }
+            }
+        }
+    }
+
+    const whois = {
+        registrar: registrar,
+        created: formatDate(created),
+        expires: formatDate(expires),
+        status: status
+    };
+
+    /* ---------- DNS ---------- */
     const dns = {
         A: await dnsLookup(domain, "A"),
         AAAA: await dnsLookup(domain, "AAAA"),
@@ -89,43 +122,50 @@ app.get("/check", async(req, res) => {
         CNAME: await dnsLookup(domain, "CNAME")
     };
 
-    // IP → ASN
-    const uniqueIPs = [...new Set([...dns.A, ...dns.AAAA])];
+    /* ---------- IP / ASN ---------- */
+    const ips = dns.A.concat(dns.AAAA);
+    const uniqueIPs = ips.filter((v, i, a) => a.indexOf(v) === i);
+
     const ipNetworks = [];
-    for (const ip of uniqueIPs) {
-        ipNetworks.push(await ipLookup(ip));
+    for (let m = 0; m < uniqueIPs.length; m++) {
+        ipNetworks.push(await ipLookup(uniqueIPs[m]));
     }
 
-    // Alerts
+    /* ---------- ALERTS ---------- */
     const alerts = [];
 
-    if (whois.expires !== "Không rõ") {
-        const d = new Date(whois.expires.split("/").reverse().join("-"));
+    if (expires) {
+        const d = new Date(expires);
         const days = Math.ceil((d - new Date()) / (1000 * 60 * 60 * 24));
-        if (days < 30) alerts.push(`Domain sắp hết hạn (${days} ngày)`);
+        if (days < 30) {
+            alerts.push("Domain sắp hết hạn (" + days + " ngày)");
+        }
     }
 
-    ipNetworks.forEach(ip => {
+    for (let n = 0; n < ipNetworks.length; n++) {
         if (
-            whois.registrar !== "Không rõ" &&
-            ip.provider !== "Other" &&
-            !whois.registrar.toUpperCase().includes(ip.provider)
+            registrar !== "Không rõ" &&
+            ipNetworks[n].provider !== "Other" &&
+            registrar.toUpperCase().indexOf(ipNetworks[n].provider) === -1
         ) {
             alerts.push(
-                `Domain đăng ký tại ${whois.registrar} nhưng IP thuộc ${ip.provider}`
+                "Domain đăng ký tại " + registrar +
+                " nhưng IP thuộc " + ipNetworks[n].provider
             );
         }
-    });
+    }
 
     res.json({
-        domain,
-        whois,
-        dns,
+        domain: domain,
+        whois: whois,
+        dns: dns,
         ip_networks: ipNetworks,
-        alerts
+        alerts: alerts
     });
 });
 
-app.listen(3000, "127.0.0.1", () => {
-    console.log("WHOIS Support API running on 127.0.0.1:3000");
+/* ================= START ================= */
+
+app.listen(3001, "127.0.0.1", function() {
+    console.log("WHOIS Support API v2 running on 127.0.0.1:3001");
 });
