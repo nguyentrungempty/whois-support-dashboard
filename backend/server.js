@@ -143,15 +143,18 @@ app.get("/check", async (req, res) => {
 
   /* DNS */
   const dnsData = {
-    A: await dnsLookup(domain, "A"),
-    AAAA: await dnsLookup(domain, "AAAA"),
-    CNAME: await dnsLookup(domain, "CNAME"),
-    MX: await dnsLookup(domain, "MX"),
-    NS: await dnsLookup(domain, "NS"),
-    TXT: await dnsLookup(domain, "TXT"),
-    SRV: await dnsLookup(domain, "SRV"),
-    SOA: await dnsLookup(domain, "SOA"),
-    CAA: await dnsLookup(domain, "CAA")
+        A: await dnsLookup(domain, "IPv4 (A)"),
+        AAAA: await dnsLookup(domain, "IPv6 (AAAA)"),
+        CNAME: await dnsLookup(domain, "CNAME"),
+        NS: await dnsLookup(domain, "NS"),
+        MX: await dnsLookup(domain, "MX"),
+        TXT: await dnsLookup(domain, "TXT"),
+        PTR: await dnsLookup(domain, "PTR"),
+        SRV: await dnsLookup(domain, "SRV"),
+        SOA: await dnsLookup(domain, "SOA"),
+        CAA: await dnsLookup(domain, "CAA"),
+        DS: await dnsLookup(domain, "DS"),
+        DNSKEY: await dnsLookup(domain, "DNSKEY")
   };
 
   /* IP & ASN */
