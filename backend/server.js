@@ -46,17 +46,6 @@ async function ipLookup(ip) {
     }
 }
 
-async function rdapLookup(domain) {
-    try {
-        const res = await axios.get(
-            "https://api.whois.vu/?q=" + domain
-        );
-        return res.data;
-    } catch (e) {
-        return null;
-    }
-}
-
 async function analyzeWebsite(domain) {
   try {
     const url = "http://" + domain;
@@ -120,7 +109,7 @@ app.get("/check", async function(req, res) {
     }
 
     /* ---------- WHOIS (RDAP) ---------- */
-    const rdap = await rdapLookup(domain);
+    const rdap = await axios.get(`https://api.whois.vu/?q=${domain}`);
 
     let registrar = "Không rõ";
     let created = null;
