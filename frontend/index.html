@@ -92,6 +92,7 @@
             <button onclick="show('dns')">DNS</button>
             <button onclick="show('ip')">IP / Network</button>
             <button onclick="show('alerts')">Alerts</button>
+            <button onclick="show('website')">Website</button>
         </div>
         <div id="loading" class="loading" style="display:none;">
             ⏳ Đang tra cứu dữ liệu...
@@ -147,6 +148,18 @@
                 ? data.alerts.map(a=>`<div class="warn">⚠ ${a}</div>`).join("")
                 : "<div class='ok'>Không có cảnh báo</div>"
             }
+            </div>
+            <div id="website" class="tab">
+                  <div class="box">Status: ${data.website.status || ""}</div>
+                  <div class="box">Server: ${data.website.server || ""}</div>
+                  <div class="box">HTTPS: ${data.website.https ? "Có" : "Không"}</div>
+                  <div class="box">
+                        Technologies:<br>
+                        ${(data.website.technologies || []).join("<br>")}
+                  </div>
+                  <div class="box">
+                        Score: ${data.website.score || 0}/100
+                  </div>
             </div>
             `;
         }
