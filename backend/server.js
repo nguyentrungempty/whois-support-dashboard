@@ -1,6 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const detectProvider = require("./provider-map");
+const cheerio = require("cheerio");
 
 const app = express();
 
@@ -56,6 +57,60 @@ async function rdapLookup(domain) {
         return null;
     }
 }
+
+async function analyzeWebsite(domain) {
+  try {
+    const url = "http://" + domain;
+    const res = await axios.get(url, {
+      timeout: 8000,
+      validateStatus: () => true
+    });
+
+    const headers = res.headers;
+    const html = res.data || "";
+    const $ = cheerio.load(html);
+
+    let tech = [];
+    let score = 100;
+
+    // HTTPS check
+    const https = headers["strict-transport-security"] ? true : false;
+    if (!https) score -= 10;
+
+    // Server header
+    const server = headers["server"] || "Unknown";
+
+    // Technology detection
+    if (html.includes("wp-content")) tech.push("WordPress");
+    if (html.includes("react")) tech.push("React");
+    if (html.includes("vue")) tech.push("Vue");
+    if (html.includes("jquery")) tech.push("jQuery");
+    if (headers["cf-ray"]) tech.push("Cloudflare");
+
+    if (tech.length === 0) tech.push("Unknown");
+
+    // Basic scoring
+    if (!headers["x-frame-options"]) score -= 5;
+    if (!headers["content-security-policy"]) score -= 5;
+    if (!headers["x-content-type-options"]) score -= 5;
+
+    if (score < 0) score = 0;
+
+    return {
+      status: res.status,
+      server: server,
+      technologies: tech,
+      https: https,
+      score: score
+    };
+
+  } catch (e) {
+    return {
+      error: "Không truy cập được website"
+    };
+  }
+}
+
 
 /* ================= API ================= */
 
@@ -142,6 +197,9 @@ app.get("/check", async function(req, res) {
         }
     }
 
+    /* ---------- WEBSITE ---------- */
+    const website = await analyzeWebsite(domain);
+
     for (let n = 0; n < ipNetworks.length; n++) {
         if (
             registrar !== "Không rõ" &&
@@ -160,7 +218,8 @@ app.get("/check", async function(req, res) {
         whois: whois,
         dns: dns,
         ip_networks: ipNetworks,
-        alerts: alerts
+        alerts: alerts,
+        website: website
     });
 });
 
