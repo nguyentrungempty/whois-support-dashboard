@@ -86,10 +86,10 @@ function render(data, tab) {
 
   if (tab === "whois") {
     r.innerHTML = `
-      <div class="box">Registrar: ${data.whois?.registrar || "-"}</div>
-      <div class="box">Created: ${data.whois?.created || "-"}</div>
-      <div class="box">Expires: ${data.whois?.expires || "-"}</div>
-      <div class="box">Status: ${(data.whois?.status || []).join(", ")}</div>
+      <div class="box">Quản lý tại Nhà đăng ký: ${data.whois?.registrar || "-"}</div>
+      <div class="box">Ngày đăng ký: ${data.whois?.created || "-"}</div>
+      <div class="box">Ngày hết hạn: ${data.whois?.expires || "-"}</div>
+      <div class="box">Cờ trạng thái: ${(data.whois?.status || []).join(", ")}</div>
     `;
   }
 
@@ -142,7 +142,7 @@ function render(data, tab) {
       <div class="box">Server: ${data.website.server || "-"}</div>
       <div class="box">HTTPS: ${data.website.https ? "Có" : "Không"}</div>
       <div class="box">
-        Technologies:<br>
+        Công nghệ sử dụng:<br>
         ${(data.website.technologies || []).join("<br>")}
       </div>
       <div class="box">
