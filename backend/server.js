@@ -49,7 +49,7 @@ async function ipLookup(ip) {
 async function rdapLookup(domain) {
     try {
         const res = await axios.get(
-            "https://rdap.identitydigital.services/rdap/domain/" + domain
+            "https://api.whois.vu/?q=" + domain
         );
         return res.data;
     } catch (e) {
