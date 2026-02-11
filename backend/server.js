@@ -132,13 +132,6 @@ app.get("/check", async function(req, res) {
         : []
     });
 
-    const whois = {
-        registrar: registrar,
-        created: formatDate(created),
-        expires: formatDate(expires),
-        status: status
-    };
-
     /* ---------- DNS ---------- */
     const dns = {
         A: await dnsLookup(domain, "A"),
