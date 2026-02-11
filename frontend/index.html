@@ -33,9 +33,19 @@
         button {
             padding: 12px 18px;
             border-radius: 8px;
+            cursor: pointer;
             border: none;
             background: #2563eb;
             color: #fff
+        }
+        
+        button:hover {
+            background: #1d4ed8;
+        }
+        
+        .loading {
+            color: #38bdf8;
+            margin-bottom: 12px;
         }
         
         .tabs button {
@@ -83,6 +93,9 @@
             <button onclick="show('ip')">IP / Network</button>
             <button onclick="show('alerts')">Alerts</button>
         </div>
+        <div id="loading" class="loading" style="display:none;">
+            ⏳ Đang tra cứu dữ liệu...
+        </div>
 
         <div id="content"></div>
     </div>
@@ -103,39 +116,40 @@
         }
 
         function render() {
+            document.getElementById("loading").style.display = "block";
             document.getElementById("content").innerHTML = `
 
-<div id="whois" class="tab active">
-  <div class="box">Registrar: ${data.whois.registrar}</div>
-  <div class="box">Created: ${data.whois.created}</div>
-  <div class="box">Expires: ${data.whois.expires}</div>
-  <div class="box">Status: ${data.whois.status.join(", ")}</div>
-</div>
+            <div id="whois" class="tab active">
+            <div class="box">Registrar: ${data.whois.registrar}</div>
+            <div class="box">Created: ${data.whois.created}</div>
+            <div class="box">Expires: ${data.whois.expires}</div>
+            <div class="box">Status: ${data.whois.status.join(", ")}</div>
+            </div>
 
-<div id="dns" class="tab">
-  ${Object.keys(data.dns).map(k=>`
-    <div class="box"><b>${k}</b><br>${data.dns[k].join("<br>")||"—"}</div>
-  `).join("")}
-</div>
+            <div id="dns" class="tab">
+            ${Object.keys(data.dns).map(k=>`
+                <div class="box"><b>${k}</b><br>${data.dns[k].join("<br>")||"—"}</div>
+            `).join("")}
+            </div>
 
-<div id="ip" class="tab">
-  ${data.ip_networks.map(i=>`
-    <div class="box">
-      ${i.ip}<br>
-      ${i.asn}<br>
-      ${i.city}, ${i.region}, ${i.country}
-    </div>
-  `).join("")}
-</div>
+            <div id="ip" class="tab">
+            ${data.ip_networks.map(i=>`
+                <div class="box">
+                ${i.ip}<br>
+                ${i.asn}<br>
+                ${i.city}, ${i.region}, ${i.country}
+                </div>
+            `).join("")}
+            </div>
 
-<div id="alerts" class="tab">
-  ${data.alerts.length
-    ? data.alerts.map(a=>`<div class="warn">⚠ ${a}</div>`).join("")
-    : "<div class='ok'>Không có cảnh báo</div>"
-  }
-</div>
-`;
-}
+            <div id="alerts" class="tab">
+            ${data.alerts.length
+                ? data.alerts.map(a=>`<div class="warn">⚠ ${a}</div>`).join("")
+                : "<div class='ok'>Không có cảnh báo</div>"
+            }
+            </div>
+            `;
+        }
     </script>
 </body>
 
