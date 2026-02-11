@@ -94,33 +94,70 @@ function render(data, tab) {
   }
 
   if (tab === "dns") {
-    let html = "";
+  let html = "";
 
-    Object.keys(data.dns || {}).forEach(k => {
-      let value = data.dns[k];
+  Object.keys(data.dns || {}).forEach(k => {
+    let value = data.dns[k];
+    let content = "-";
 
-      if (!value || value.length === 0) {
-        value = "-";
-      } else if (Array.isArray(value)) {
-        value = value.map(v => {
-          if (typeof v === "object") return JSON.stringify(v);
-          return v;
-        }).join("<br>");
-      } else if (typeof value === "object") {
-        value = JSON.stringify(value);
+    if (value && value.length !== 0) {
+
+      // MX format
+      if (k === "MX") {
+        content = value.map(v =>
+          `Priority: ${v.priority} → ${v.exchange}`
+        ).join("<br>");
       }
 
-      html += `
-        <div class="box">
-          <strong>${k}</strong><br>
-          ${value}
+      // TXT format
+      else if (k === "TXT") {
+        content = value.map(v =>
+          Array.isArray(v) ? v.join("") : v
+        ).join("<br>");
+      }
+
+      // SOA format
+      else if (k === "SOA" && typeof value === "object") {
+        content = `
+          Primary NS: ${value.nsname}<br>
+          Hostmaster: ${value.hostmaster}<br>
+          Serial: ${value.serial}<br>
+          Refresh: ${value.refresh}<br>
+          Retry: ${value.retry}<br>
+          Expire: ${value.expire}<br>
+          TTL: ${value.minttl}
+        `;
+      }
+
+      // Object khác
+      else if (typeof value === "object" && !Array.isArray(value)) {
+        content = Object.entries(value)
+          .map(([key, val]) => `${key}: ${val}`)
+          .join("<br>");
+      }
+
+      // Array bình thường
+      else if (Array.isArray(value)) {
+        content = value.join("<br>");
+      }
+
+      else {
+        content = value;
+      }
+    }
+
+    html += `
+      <div class="box">
+        <strong>${k}</strong>
+        <div style="margin-top:8px;font-family:monospace;color:#9fd3ff">
+          ${content}
         </div>
-      `;
-    });
+      </div>
+    `;
+  });
 
-    r.innerHTML = html;
-  }
-
+  r.innerHTML = html;
+}
   if (tab === "ip") {
     r.innerHTML = `
       <div class="box">IP: ${data.ip?.ip || "-"}</div>
