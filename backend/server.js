@@ -168,8 +168,8 @@ app.get("/check", async function(req, res) {
 
     /* ---------- DNS ---------- */
     const dns = {
-        A: await dnsLookup(domain, "IPv4 (A)"),
-        AAAA: await dnsLookup(domain, "IPv6 (AAAA)"),
+        A: await dnsLookup(domain, "A"),
+        AAAA: await dnsLookup(domain, "AAAA"),
         CNAME: await dnsLookup(domain, "CNAME"),
         NS: await dnsLookup(domain, "NS"),
         MX: await dnsLookup(domain, "MX"),
