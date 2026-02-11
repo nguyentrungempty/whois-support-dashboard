@@ -1,174 +1,157 @@
 <!DOCTYPE html>
-<html lang="vi">
-
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>WHOIS Support Dashboard</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body {
-            background: #0f172a;
-            color: #e5e7eb;
-            font-family: system-ui;
-            padding: 30px
-        }
-        
-        .card {
-            max-width: 960px;
-            margin: auto;
-            background: #020617;
-            border-radius: 16px;
-            padding: 24px
-        }
-        
-        input {
-            width: 70%;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #334155;
-            background: #020617;
-            color: #fff
-        }
-        
-        button {
-            padding: 12px 18px;
-            border-radius: 8px;
-            cursor: pointer;
-            border: none;
-            background: #2563eb;
-            color: #fff
-        }
-        
-        button:hover {
-            background: #1d4ed8;
-        }
-        
-        .loading {
-            color: #38bdf8;
-            margin-bottom: 12px;
-        }
-        
-        .tabs button {
-            margin-right: 6px;
-            background: #020617;
-            border: 1px solid #334155
-        }
-        
-        .tab {
-            display: none;
-            margin-top: 20px
-        }
-        
-        .tab.active {
-            display: block
-        }
-        
-        .box {
-            border: 1px solid #334155;
-            border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 10px
-        }
-        
-        .warn {
-            color: #facc15
-        }
-        
-        .ok {
-            color: #22c55e
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>WHOIS Support Dashboard</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #0b1320;
+      color: white;
+      margin: 0;
+      padding: 40px;
+    }
+    .card {
+      max-width: 900px;
+      margin: auto;
+      background: #111a2e;
+      padding: 30px;
+      border-radius: 12px;
+    }
+    input {
+      width: 70%;
+      padding: 10px;
+      border-radius: 6px;
+      border: none;
+    }
+    button {
+      padding: 10px 20px;
+      background: #2d6cdf;
+      border: none;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .tabs button {
+      margin-right: 10px;
+      margin-top: 10px;
+      background: #1a253d;
+    }
+    .box {
+      background: #0e1627;
+      padding: 15px;
+      margin-top: 15px;
+      border-radius: 8px;
+    }
+  </style>
 </head>
-
 <body>
-    <div class="card">
-        <h2>🔍 WHOIS Support Dashboard</h2>
 
-        <input id="domain" placeholder="vd: example.com">
-        <button onclick="lookup()">Tra cứu</button>
+<div class="card">
+  <h2>🔍 WHOIS Support Dashboard</h2>
 
-        <div class="tabs" style="margin-top:20px">
-            <button onclick="show('whois')">WHOIS</button>
-            <button onclick="show('dns')">DNS</button>
-            <button onclick="show('ip')">IP / Network</button>
-            <button onclick="show('alerts')">Alerts</button>
-            <button onclick="show('website')">Website</button>
+  <input id="domain" value="trungnq.xyz">
+  <button onclick="lookup()">Tra cứu</button>
+
+  <div class="tabs">
+    <button onclick="showTab('whois')">WHOIS</button>
+    <button onclick="showTab('dns')">DNS</button>
+    <button onclick="showTab('ip')">IP / Network</button>
+    <button onclick="showTab('website')">Website</button>
+  </div>
+
+  <div id="result"></div>
+</div>
+
+<script>
+let currentData = null;
+
+function showTab(tab) {
+  if (!currentData) return;
+  render(currentData, tab);
+}
+
+async function lookup() {
+  const domain = document.getElementById("domain").value;
+  document.getElementById("result").innerHTML = "⏳ Đang tra cứu...";
+
+  const res = await fetch("/check?domain=" + domain);
+  const data = await res.json();
+  currentData = data;
+  render(data, "whois");
+}
+
+function render(data, tab) {
+  const r = document.getElementById("result");
+
+  if (tab === "whois") {
+    r.innerHTML = `
+      <div class="box">Registrar: ${data.whois?.registrar || "-"}</div>
+      <div class="box">Created: ${data.whois?.created || "-"}</div>
+      <div class="box">Expires: ${data.whois?.expires || "-"}</div>
+      <div class="box">Status: ${(data.whois?.status || []).join(", ")}</div>
+    `;
+  }
+
+  if (tab === "dns") {
+    let html = "";
+
+    Object.keys(data.dns || {}).forEach(k => {
+      let value = data.dns[k];
+
+      if (!value || value.length === 0) {
+        value = "-";
+      } else if (Array.isArray(value)) {
+        value = value.map(v => {
+          if (typeof v === "object") return JSON.stringify(v);
+          return v;
+        }).join("<br>");
+      } else if (typeof value === "object") {
+        value = JSON.stringify(value);
+      }
+
+      html += `
+        <div class="box">
+          <strong>${k}</strong><br>
+          ${value}
         </div>
-        <div id="loading" class="loading" style="display:none;">
-            ⏳ Đang tra cứu dữ liệu...
-        </div>
+      `;
+    });
 
-        <div id="content"></div>
-    </div>
+    r.innerHTML = html;
+  }
 
-    <script>
-        let data = null;
-        function show(t) {
-            document.querySelectorAll(".tab").forEach(e => e.classList.remove("active"));
-            document.getElementById(t).classList.add("active");
-        }
+  if (tab === "ip") {
+    r.innerHTML = `
+      <div class="box">IP: ${data.ip?.ip || "-"}</div>
+      <div class="box">Org: ${data.ip?.org || "-"}</div>
+      <div class="box">Country: ${data.ip?.country || "-"}</div>
+      <div class="box">Region: ${data.ip?.region || "-"}</div>
+      <div class="box">City: ${data.ip?.city || "-"}</div>
+    `;
+  }
 
-        async function lookup() {
-            const domain = document.getElementById("domain").value.trim();
-            if (!domain) return alert("Vui lòng nhập tên miền");
+  if (tab === "website") {
+    if (!data.website) {
+      r.innerHTML = `<div class="box">Không có dữ liệu</div>`;
+      return;
+    }
 
-            document.getElementById("loading").style.display = "block";
-            const d = document.getElementById("domain").value;
-            const r = await fetch(`/check?domain=${d}`);
-            data = await r.json();
-            render();
-            document.getElementById("loading").style.display = "none";
-        }
+    r.innerHTML = `
+      <div class="box">HTTP Status: ${data.website.status || "-"}</div>
+      <div class="box">Server: ${data.website.server || "-"}</div>
+      <div class="box">HTTPS: ${data.website.https ? "Có" : "Không"}</div>
+      <div class="box">
+        Technologies:<br>
+        ${(data.website.technologies || []).join("<br>")}
+      </div>
+      <div class="box">
+        Score: ${data.website.score || 0}/100
+      </div>
+    `;
+  }
+}
+</script>
 
-        function render() {
-
-            document.getElementById("content").innerHTML = `
-
-            <div id="whois" class="tab active">
-            <div class="box">Registrar: ${data.whois.registrar}</div>
-            <div class="box">Created: ${data.whois.created}</div>
-            <div class="box">Expires: ${data.whois.expires}</div>
-            <div class="box">Status: ${data.whois.status.join(", ")}</div>
-            </div>
-
-            <div id="dns" class="tab">
-            ${Object.keys(data.dns).map(k=>`
-                <div class="box"><b>${k}</b><br>${data.dns[k].join("<br>")||"—"}</div>
-            `).join("")}
-            </div>
-
-            <div id="ip" class="tab">
-            ${data.ip_networks.map(i=>`
-                <div class="box">
-                ${i.ip}<br>
-                ${i.asn}<br>
-                ${i.city}, ${i.region}, ${i.country}
-                </div>
-            `).join("")}
-            </div>
-
-            <div id="alerts" class="tab">
-            ${data.alerts.length
-                ? data.alerts.map(a=>`<div class="warn">⚠ ${a}</div>`).join("")
-                : "<div class='ok'>Không có cảnh báo</div>"
-            }
-            </div>
-            <div id="website" class="tab">
-                  <div class="box">Status: ${data.website.status || ""}</div>
-                  <div class="box">Server: ${data.website.server || ""}</div>
-                  <div class="box">HTTPS: ${data.website.https ? "Có" : "Không"}</div>
-                  <div class="box">
-                    Technologies:<br>
-                    ${(data.website.technologies || []).join("<br>")}
-                  </div>
-                  <div class="box">
-                    Score: ${data.website.score || 0}/100
-                  </div>
-            </div>
-
-            `;
-        }
-    </script>
 </body>
-
 </html>
