@@ -2,7 +2,6 @@ const express = require("express");
 const axios = require("axios");
 const detectProvider = require("./provider-map");
 const cheerio = require("cheerio");
-
 const app = express();
 
 /* ================= HELPERS ================= */
@@ -169,12 +168,18 @@ app.get("/check", async function(req, res) {
 
     /* ---------- DNS ---------- */
     const dns = {
-        A: await dnsLookup(domain, "A"),
-        AAAA: await dnsLookup(domain, "AAAA"),
+        A: await dnsLookup(domain, "IPv4 (A)"),
+        AAAA: await dnsLookup(domain, "IPv6 (AAAA)"),
+        CNAME: await dnsLookup(domain, "CNAME"),
         NS: await dnsLookup(domain, "NS"),
         MX: await dnsLookup(domain, "MX"),
         TXT: await dnsLookup(domain, "TXT"),
-        CNAME: await dnsLookup(domain, "CNAME")
+        PTR: await dnsLookup(domain, "PTR"),
+        SRV: await dnsLookup(domain, "SRV"),
+        SOA: await dnsLookup(domain, "SOA"),
+        CAA: await dnsLookup(domain, "CAA"),
+        DS: await dnsLookup(domain, "DS"),
+        DNSKEY: await dnsLookup(domain, "DNSKEY")
     };
 
     /* ---------- IP / ASN ---------- */
@@ -197,9 +202,6 @@ app.get("/check", async function(req, res) {
         }
     }
 
-    /* ---------- WEBSITE ---------- */
-    const website = await analyzeWebsite(domain);
-
     for (let n = 0; n < ipNetworks.length; n++) {
         if (
             registrar !== "Không rõ" &&
@@ -212,6 +214,8 @@ app.get("/check", async function(req, res) {
             );
         }
     }
+
+    const website = await analyzeWebsite(domain);
 
     res.json({
         domain: domain,
