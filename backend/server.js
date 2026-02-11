@@ -122,14 +122,6 @@ app.get("/check", async function(req, res) {
 
       created: formatDate(whois.created || whois.creation_date),
       expires: formatDate(whois.expires || whois.expiry_date),
-
-      nameservers: dnsNS.data.Answer
-        ? dnsNS.data.Answer.map(i => i.data)
-        : [],
-
-      ips: dnsA.data.Answer
-        ? dnsA.data.Answer.map(i => i.data)
-        : []
     });
 
     /* ---------- DNS ---------- */
