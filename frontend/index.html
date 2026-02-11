@@ -102,8 +102,6 @@
 
     <script>
         let data = null;
-        document.getElementById("loading").style.display = "block";
-
         function show(t) {
             document.querySelectorAll(".tab").forEach(e => e.classList.remove("active"));
             document.getElementById(t).classList.add("active");
@@ -114,6 +112,7 @@
             const r = await fetch(`/check?domain=${d}`);
             data = await r.json();
             render();
+            document.getElementById("loading").style.display = "block";
         }
 
         function render() {
