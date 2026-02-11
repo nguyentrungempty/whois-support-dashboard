@@ -108,11 +108,15 @@
         }
 
         async function lookup() {
+            const domain = document.getElementById("domain").value.trim();
+            if (!domain) return alert("Vui lòng nhập tên miền");
+
+            document.getElementById("loading").style.display = "block";
             const d = document.getElementById("domain").value;
             const r = await fetch(`/check?domain=${d}`);
             data = await r.json();
             render();
-            document.getElementById("loading").style.display = "block";
+            document.getElementById("loading").style.display = "none";
         }
 
         function render() {
