@@ -99,6 +99,16 @@ async function analyzeWebsite(domain) {
   }
 }
 
+async function rdapLookup(domain) {
+    try {
+        const res = await axios.get(
+            "https://rdap.identitydigital.services/rdap/domain/" + domain
+        );
+        return res.data;
+    } catch (e) {
+        return null;
+    }
+}
 
 /* ================= API ================= */
 
@@ -107,22 +117,52 @@ app.get("/check", async function(req, res) {
     if (!domain) {
         return res.json({ error: "Thiếu domain" });
     }
+    /* ---------- WHOIS (RDAP) ---------- */
+    const rdap = await rdapLookup(domain);
 
-    /* ---------- WHOIS ---------- */
-    const whoisRes = await axios.get(`https://api.whois.vu/?q=${domain}`);
+    let registrar = "Không rõ";
+    let created = null;
+    let expires = null;
+    let status = [];
 
-    const whois = whoisRes.data;
+    if (rdap) {
+        status = rdap.status || [];
 
-    res.json({
-      registrar:
-        whois.registrar ||
-        whois.registrarName ||
-        whois.sponsoringRegistrar ||
-        "Không rõ",
+        if (rdap.entities && Array.isArray(rdap.entities)) {
+            for (let i = 0; i < rdap.entities.length; i++) {
+                const e = rdap.entities[i];
+                if (e.roles && e.roles.indexOf("registrar") !== -1) {
+                    if (e.vcardArray && e.vcardArray[1]) {
+                        const vc = e.vcardArray[1];
+                        for (let j = 0; j < vc.length; j++) {
+                            if (vc[j][0] === "fn" && vc[j][3]) {
+                                registrar = vc[j][3];
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-      created: formatDate(whois.created || whois.creation_date),
-      expires: formatDate(whois.expires || whois.expiry_date),
-    });
+        if (rdap.events && Array.isArray(rdap.events)) {
+            for (let k = 0; k < rdap.events.length; k++) {
+                if (rdap.events[k].eventAction === "registration") {
+                    created = rdap.events[k].eventDate;
+                }
+                if (rdap.events[k].eventAction === "expiration") {
+                    expires = rdap.events[k].eventDate;
+                }
+            }
+        }
+    }
+
+    const whois = {
+        registrar: registrar,
+        created: formatDate(created),
+        expires: formatDate(expires),
+        status: status
+    };
 
     /* ---------- DNS ---------- */
     const dns = {
