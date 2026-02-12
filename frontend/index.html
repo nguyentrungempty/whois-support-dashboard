@@ -1,66 +1,89 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>WHOIS Support Dashboard</title>
-  <style>
-    body {
-      font-family: Arial;
-      background: #0b1320;
-      color: white;
-      margin: 0;
-      padding: 40px;
-    }
-    .card {
-      max-width: 900px;
-      margin: auto;
-      background: #111a2e;
-      padding: 30px;
-      border-radius: 12px;
-    }
-    input {
-      width: 70%;
-      padding: 10px;
-      border-radius: 6px;
-      border: none;
-    }
-    button {
-      padding: 10px 20px;
-      background: #2d6cdf;
-      border: none;
-      color: white;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .tabs button {
-      margin-right: 10px;
-      margin-top: 10px;
-      background: #1a253d;
-    }
-    .box {
-      background: #0e1627;
-      padding: 15px;
-      margin-top: 15px;
-      border-radius: 8px;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>WHOIS Support Dashboard</title>
+
+<style>
+body {
+  font-family: Arial;
+  background: #0b1320;
+  color: white;
+  margin: 0;
+  padding: 40px;
+}
+
+.container {
+  max-width: 1100px;
+  margin: auto;
+  background: #111a2e;
+  padding: 30px;
+  border-radius: 12px;
+}
+
+input {
+  width: 70%;
+  padding: 12px;
+  border-radius: 6px;
+  border: none;
+}
+
+button {
+  padding: 12px 20px;
+  background: #2d6cdf;
+  border: none;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tabs button {
+  margin-right: 8px;
+  margin-top: 12px;
+  background: #1a253d;
+}
+
+.card {
+  background: #0e1627;
+  padding: 18px;
+  margin-top: 15px;
+  border-radius: 10px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.good { background: #1f7a1f; }
+.bad { background: #8b1e1e; }
+.warn { background: #b8860b; }
+</style>
 </head>
 <body>
 
-<div class="card">
-  <h2>🔍 WHOIS Support Dashboard</h2>
+<div class="container">
+<h2>🔍 WHOIS Support Dashboard</h2>
 
-  <input id="domain" value="trungnq.xyz">
-  <button onclick="lookup()">Tra cứu</button>
+<input id="domain" value="trungnq.xyz">
+<button onclick="lookup()">Tra cứu</button>
 
-  <div class="tabs">
-    <button onclick="showTab('whois')">WHOIS</button>
-    <button onclick="showTab('dns')">DNS</button>
-    <button onclick="showTab('ip')">IP / Network</button>
-    <button onclick="showTab('website')">Website</button>
-  </div>
+<div class="tabs">
+<button onclick="showTab('whois')">WHOIS</button>
+<button onclick="showTab('dns')">DNS</button>
+<button onclick="showTab('ip')">IP / Network</button>
+<button onclick="showTab('website')">Website</button>
+<button onclick="showTab('security')">Security</button>
+</div>
 
-  <div id="result"></div>
+<div id="result"></div>
 </div>
 
 <script>
@@ -75,7 +98,7 @@ async function lookup() {
   const domain = document.getElementById("domain").value;
   document.getElementById("result").innerHTML = "⏳ Đang tra cứu...";
 
-  const res = await fetch("/check?domain=" + domain);
+  const res = await fetch("/api/check?domain=" + domain);
   const data = await res.json();
   currentData = data;
   render(data, "whois");
@@ -86,106 +109,65 @@ function render(data, tab) {
 
   if (tab === "whois") {
     r.innerHTML = `
-      <div class="box">Quản lý tại Nhà đăng ký: ${data.whois?.registrar || "-"}</div>
-      <div class="box">Ngày đăng ký: ${data.whois?.created || "-"}</div>
-      <div class="box">Ngày hết hạn: ${data.whois?.expires || "-"}</div>
-      <div class="box">Cờ trạng thái: ${(data.whois?.status || []).join(", ")}</div>
+      <div class="grid">
+        <div class="card">Registrar: ${data.whois.registrar}</div>
+        <div class="card">Created: ${data.whois.created}</div>
+        <div class="card">Expires: ${data.whois.expires}</div>
+        <div class="card">Status: ${(data.whois.status || []).join(", ")}</div>
+      </div>
     `;
   }
 
-  if (tab === "dns") {
-  let html = "";
-
-  Object.keys(data.dns || {}).forEach(k => {
-    let value = data.dns[k];
-    let content = "-";
-
-    if (value && value.length !== 0) {
-
-      // MX format
-      if (k === "MX") {
-        content = value.map(v =>
-          `Priority: ${v.priority} → ${v.exchange}`
-        ).join("<br>");
-      }
-
-      // TXT format
-      else if (k === "TXT") {
-        content = value.map(v =>
-          Array.isArray(v) ? v.join("") : v
-        ).join("<br>");
-      }
-
-      // SOA format
-      else if (k === "SOA" && typeof value === "object") {
-        content = `
-          Primary NS: ${value.nsname}<br>
-          Hostmaster: ${value.hostmaster}<br>
-          Serial: ${value.serial}<br>
-          Refresh: ${value.refresh}<br>
-          Retry: ${value.retry}<br>
-          Expire: ${value.expire}<br>
-          TTL: ${value.minttl}
-        `;
-      }
-
-      // Object khác
-      else if (typeof value === "object" && !Array.isArray(value)) {
-        content = Object.entries(value)
-          .map(([key, val]) => `${key}: ${val}`)
-          .join("<br>");
-      }
-
-      // Array bình thường
-      else if (Array.isArray(value)) {
-        content = value.join("<br>");
-      }
-
-      else {
-        content = value;
-      }
-    }
-
-    html += `
-      <div class="box">
-        <strong>${k}</strong>
-        <div style="margin-top:8px;font-family:monospace;color:#9fd3ff">
-          ${content}
-        </div>
-      </div>
-    `;
-  });
-
-  r.innerHTML = html;
-}
   if (tab === "ip") {
     r.innerHTML = `
-      <div class="box">IP: ${data.ip?.ip || "-"}</div>
-      <div class="box">Org: ${data.ip?.org || "-"}</div>
-      <div class="box">Country: ${data.ip?.country || "-"}</div>
-      <div class="box">Region: ${data.ip?.region || "-"}</div>
-      <div class="box">City: ${data.ip?.city || "-"}</div>
+      <div class="grid">
+        <div class="card">IP: ${data.ipInfo?.ip || "-"}</div>
+        <div class="card">ASN: ${data.ipInfo?.asn || "-"}</div>
+        <div class="card">Org: ${data.ipInfo?.org || "-"}</div>
+        <div class="card">Country: ${data.ipInfo?.country || "-"}</div>
+        <div class="card">Region: ${data.ipInfo?.region || "-"}</div>
+        <div class="card">City: ${data.ipInfo?.city || "-"}</div>
+      </div>
     `;
   }
 
   if (tab === "website") {
-    if (!data.website) {
-      r.innerHTML = `<div class="box">Không có dữ liệu</div>`;
-      return;
-    }
-
     r.innerHTML = `
-      <div class="box">HTTP Status: ${data.website.status || "-"}</div>
-      <div class="box">Server: ${data.website.server || "-"}</div>
-      <div class="box">HTTPS: ${data.website.https ? "Có" : "Không"}</div>
-      <div class="box">
-        Công nghệ sử dụng:<br>
-        ${(data.website.technologies || []).join("<br>")}
-      </div>
-      <div class="box">
-        Score: ${data.website.score || 0}/100
+      <div class="grid">
+        <div class="card">Title: ${data.website?.title || "-"}</div>
+        <div class="card">Server: ${data.website?.server || "-"}</div>
+        <div class="card">Powered By: ${data.website?.poweredBy || "-"}</div>
+        <div class="card">Response Time: ${data.website?.responseTime || "-"} ms</div>
+        <div class="card">HTTPS: ${data.website?.https ? "Yes" : "No"}</div>
+        <div class="card">SSL Issuer: ${data.ssl?.issuer || "-"}</div>
+        <div class="card">SSL Valid To: ${data.ssl?.valid_to || "-"}</div>
       </div>
     `;
+  }
+
+  if (tab === "security") {
+    const sec = data.security || {};
+    r.innerHTML = `
+      <div class="grid">
+        <div class="card">HSTS: ${sec.hsts ? "✅" : "❌"}</div>
+        <div class="card">X-Frame-Options: ${sec.xframe ? "✅" : "❌"}</div>
+        <div class="card">XSS Protection: ${sec.xss ? "✅" : "❌"}</div>
+        <div class="card">Content-Type Options: ${sec.contentType ? "✅" : "❌"}</div>
+      </div>
+    `;
+  }
+
+  if (tab === "dns") {
+    let html = "";
+    Object.keys(data.dns || {}).forEach(k => {
+      html += `
+        <div class="card">
+          <strong>${k}</strong><br>
+          ${JSON.stringify(data.dns[k], null, 2)}
+        </div>
+      `;
+    });
+    r.innerHTML = html;
   }
 }
 </script>
