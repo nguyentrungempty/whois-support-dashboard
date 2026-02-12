@@ -1,182 +1,200 @@
 const express = require("express");
+const cors = require("cors");
 const axios = require("axios");
 const dns = require("dns").promises;
-const { exec } = require("child_process");
+const https = require("https");
+const tls = require("tls");
 const cheerio = require("cheerio");
+const { exec } = require("child_process");
 
 const app = express();
-const PORT = 3001;
+app.use(cors());
+app.use(express.json());
 
-/* ============================= */
-/* ===== WHOIS PARSER ========= */
-/* ============================= */
-
-function parseWhois(text) {
-  const registrar =
-    text.match(/Registrar:\s*(.*)/i)?.[1] ||
-    text.match(/Registrar Name:\s*(.*)/i)?.[1] ||
-    "Không rõ";
-
-  const created =
-    text.match(/Creation Date:\s*(.*)/i)?.[1] ||
-    text.match(/Created On:\s*(.*)/i)?.[1] ||
-    "Không rõ";
-
-  const expires =
-    text.match(/Registry Expiry Date:\s*(.*)/i)?.[1] ||
-    text.match(/Expiry Date:\s*(.*)/i)?.[1] ||
-    "Không rõ";
-
-  const status =
-    [...text.matchAll(/Status:\s*(.*)/gi)].map(m => m[1]) || [];
-
-  return { registrar, created, expires, status };
+/* ===============================
+   RDAP AUTO BY TLD
+================================ */
+function getRdapUrl(domain) {
+  const tld = domain.split(".").pop().toLowerCase();
+  const map = {
+    com: "https://rdap.verisign.com/com/v1/domain/",
+    net: "https://rdap.verisign.com/net/v1/domain/",
+    org: "https://rdap.publicinterestregistry.org/rdap/domain/",
+    xyz: "https://rdap.nic.xyz/domain/",
+    vn: "https://rdap.vnnic.vn/domain/"
+  };
+  return map[tld] || "https://rdap.org/domain/";
 }
 
-function getWhois(domain) {
-  return new Promise((resolve) => {
-    exec(`whois ${domain}`, (err, stdout) => {
-      if (err || !stdout) {
-        return resolve({
-          registrar: "Không rõ",
-          created: "Không rõ",
-          expires: "Không rõ",
-          status: []
-        });
+async function getWhois(domain) {
+  let result = {
+    registrar: "Không rõ",
+    created: "Không rõ",
+    expires: "Không rõ",
+    status: []
+  };
+
+  try {
+    const rdapBase = getRdapUrl(domain);
+    const url = rdapBase.endsWith("/")
+      ? rdapBase + domain
+      : rdapBase + "/" + domain;
+
+    const res = await axios.get(url, { timeout: 5000 });
+    const data = res.data;
+
+    if (data.entities) {
+      const registrar = data.entities.find(e =>
+        e.roles && e.roles.includes("registrar")
+      );
+      if (registrar?.vcardArray) {
+        const fn = registrar.vcardArray[1].find(v => v[0] === "fn");
+        if (fn) result.registrar = fn[3];
       }
-      resolve(parseWhois(stdout));
+    }
+
+    if (data.events) {
+      data.events.forEach(e => {
+        if (e.eventAction === "registration")
+          result.created = e.eventDate;
+        if (e.eventAction === "expiration")
+          result.expires = e.eventDate;
+      });
+    }
+
+    if (data.status) result.status = data.status;
+
+  } catch {}
+  return result;
+}
+
+/* ===============================
+   DNS
+================================ */
+async function getDNS(domain) {
+  const records = {};
+  try { records.A = await dns.resolve4(domain); } catch {}
+  try { records.AAAA = await dns.resolve6(domain); } catch {}
+  try { records.MX = await dns.resolveMx(domain); } catch {}
+  try { records.NS = await dns.resolveNs(domain); } catch {}
+  try { records.TXT = await dns.resolveTxt(domain); } catch {}
+  try { records.SOA = await dns.resolveSoa(domain); } catch {}
+  try { records.SRV = await dns.resolveSrv(domain); } catch {}
+  try { records.CAA = await dns.resolveCaa(domain); } catch {}
+  return records;
+}
+
+/* ===============================
+   IP INFO
+================================ */
+async function getIPInfo(ip) {
+  try {
+    const res = await axios.get(`http://ip-api.com/json/${ip}`);
+    return {
+      ip,
+      org: res.data.org,
+      country: res.data.country,
+      region: res.data.regionName,
+      city: res.data.city,
+      asn: res.data.as
+    };
+  } catch {
+    return { ip };
+  }
+}
+
+/* ===============================
+   SSL CHECK
+================================ */
+function getSSL(domain) {
+  return new Promise(resolve => {
+    const socket = tls.connect(443, domain, { servername: domain }, () => {
+      const cert = socket.getPeerCertificate();
+      resolve({
+        issuer: cert.issuer?.O,
+        valid_from: cert.valid_from,
+        valid_to: cert.valid_to
+      });
+      socket.end();
     });
+    socket.on("error", () => resolve(null));
   });
 }
 
-/* ============================= */
-/* ===== DNS LOOKUP ============ */
-/* ============================= */
-
-async function dnsLookup(domain, type) {
+/* ===============================
+   WEBSITE CHECK
+================================ */
+async function getWebsite(domain) {
   try {
-    const result = await dns.resolve(domain, type);
-    return result;
-  } catch {
-    return [];
-  }
-}
+    const start = Date.now();
+    const res = await axios.get(`https://${domain}`, { timeout: 8000 });
+    const time = Date.now() - start;
 
-/* ============================= */
-/* ===== IP INFO =============== */
-/* ============================= */
-
-async function getIPInfo(ip) {
-  try {
-    const res = await axios.get(`https://ipinfo.io/${ip}/json`);
-    return {
-      ip: res.data.ip,
-      org: res.data.org,
-      country: res.data.country,
-      region: res.data.region,
-      city: res.data.city
-    };
-  } catch {
-    return {};
-  }
-}
-
-/* ============================= */
-/* ===== WEBSITE ANALYSIS ====== */
-/* ============================= */
-
-async function analyzeWebsite(domain) {
-  try {
-    const res = await axios.get(`http://${domain}`, {
-      timeout: 8000,
-      validateStatus: () => true
-    });
-
-    const headers = res.headers;
-    const html = res.data || "";
-    const $ = cheerio.load(html);
-
-    let tech = [];
-    let score = 100;
-
-    const https = headers["strict-transport-security"] ? true : false;
-    if (!https) score -= 10;
-
-    const server = headers["server"] || "Unknown";
-
-    if (html.includes("wp-content")) tech.push("WordPress");
-    if (html.includes("react")) tech.push("React");
-    if (html.includes("vue")) tech.push("Vue");
-    if (html.includes("jquery")) tech.push("jQuery");
-    if (headers["cf-ray"]) tech.push("Cloudflare");
-
-    if (tech.length === 0) tech.push("Unknown");
-
-    if (!headers["x-frame-options"]) score -= 5;
-    if (!headers["content-security-policy"]) score -= 5;
-    if (!headers["x-content-type-options"]) score -= 5;
-
-    if (score < 0) score = 0;
+    const $ = cheerio.load(res.data);
 
     return {
-      status: res.status,
-      server,
-      https,
-      technologies: tech,
-      score
+      title: $("title").text(),
+      server: res.headers.server || null,
+      poweredBy: res.headers["x-powered-by"] || null,
+      responseTime: time,
+      https: true
     };
   } catch {
-    return { error: "Không truy cập được website" };
+    return null;
   }
 }
 
-/* ============================= */
-/* ===== MAIN ROUTE ============ */
-/* ============================= */
+/* ===============================
+   SECURITY CHECK
+================================ */
+async function getSecurity(domain) {
+  try {
+    const res = await axios.get(`https://${domain}`, { timeout: 5000 });
+    return {
+      hsts: !!res.headers["strict-transport-security"],
+      xframe: !!res.headers["x-frame-options"],
+      xss: !!res.headers["x-xss-protection"],
+      contentType: !!res.headers["x-content-type-options"]
+    };
+  } catch {
+    return null;
+  }
+}
 
-app.get("/check", async (req, res) => {
+/* ===============================
+   MAIN API
+================================ */
+app.get("/api/check", async (req, res) => {
   const domain = req.query.domain;
   if (!domain) return res.status(400).json({ error: "Missing domain" });
 
-  /* WHOIS */
-  const whois = await getWhois(domain);
+  try {
+    const whois = await getWhois(domain);
+    const dnsData = await getDNS(domain);
 
-  /* DNS */
-  const dnsData = {
-        A: await dnsLookup(domain, "IPv4 (A)"),
-        AAAA: await dnsLookup(domain, "IPv6 (AAAA)"),
-        CNAME: await dnsLookup(domain, "CNAME"),
-        NS: await dnsLookup(domain, "NS"),
-        MX: await dnsLookup(domain, "MX"),
-        TXT: await dnsLookup(domain, "TXT"),
-        PTR: await dnsLookup(domain, "PTR"),
-        SRV: await dnsLookup(domain, "SRV"),
-        SOA: await dnsLookup(domain, "SOA"),
-        CAA: await dnsLookup(domain, "CAA"),
-        DS: await dnsLookup(domain, "DS"),
-        DNSKEY: await dnsLookup(domain, "DNSKEY")
-  };
+    let ipInfo = null;
+    if (dnsData.A?.length > 0)
+      ipInfo = await getIPInfo(dnsData.A[0]);
 
-  /* IP & ASN */
-  let ipInfo = {};
-  if (dnsData.A.length > 0) {
-    ipInfo = await getIPInfo(dnsData.A[0]);
+    const ssl = await getSSL(domain);
+    const website = await getWebsite(domain);
+    const security = await getSecurity(domain);
+
+    res.json({
+      domain,
+      whois,
+      dns: dnsData,
+      ipInfo,
+      ssl,
+      website,
+      security
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-
-  /* Website */
-  const website = await analyzeWebsite(domain);
-
-  res.json({
-    domain,
-    whois,
-    dns: dnsData,
-    ip: ipInfo,
-    website
-  });
 });
 
-/* ============================= */
-
-app.listen(PORT, () => {
-  console.log(`WHOIS Support API running on 127.0.0.1:${PORT}`);
-});
+app.listen(3001, () =>
+  console.log("WHOIS Dashboard API running on 3001")
+);
